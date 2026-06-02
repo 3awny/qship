@@ -1,0 +1,68 @@
+{
+  "$schema": "./config.schema.json",
+  "_comment": "Copy this to config.json and edit. Or run `bash setup.sh` / `/qship:configure` inside Claude Code to fill it in interactively.",
+  "identity": {
+    "company_slug": "acme",
+    "company_slug_lower": "acme",
+    "company_slug_upper": "ACME",
+    "company_domain": "acme.example",
+    "user_name_or_blank": "",
+    "user_email_or_blank": ""
+  },
+  "codebase": {
+    "user_home": "/home/you",
+    "skills_root": "/home/you/.claude/skills",
+    "codebase_root": "/home/you/work/your-monorepo",
+    "codebase_dir_name": "your-monorepo",
+    "codebase_path_prefix": "src",
+    "default_branch": "develop"
+  },
+  "repos": [
+    {
+      "name": "your-repo",
+      "kind": "monolith",
+      "schema": null,
+      "package": null,
+      "has_migrations": false,
+      "runs_locally": false,
+      "is_primary": true,
+      "port": null
+    }
+  ],
+  "tooling": {
+    "primary_language": "python",
+    "test_command": "pytest tests/ -v",
+    "lint_command": "python -m flake8 . --max-line-length=120",
+    "format_command": "python -m black . && python -m isort ."
+  },
+  "local_db": {
+    "local_db_user": "you",
+    "local_db_host": "localhost",
+    "local_db_port": 5432,
+    "local_dev_db_name": "dev_db",
+    "db_owner_role": "app_admin"
+  },
+  "tracker": {
+    "tracker_type": "jira",
+    "jira_project_key": "PROJ",
+    "example_ticket_id": "PROJ-1",
+    "atlassian_cloud_id": ""
+  },
+  "github": {
+    "gh_host": "github.com",
+    "gh_org": "your-org"
+  },
+  "env_var_names": {
+    "env_service_url_key": "SERVICE_URL",
+    "env_cloud_url_key": "CLOUD_URL",
+    "env_oauth_client_id_key": "OAUTH_CLIENT_ID",
+    "env_oauth_client_secret_key": "OAUTH_CLIENT_SECRET"
+  },
+  "state": {
+    "state_root": "/tmp/acme-qship",
+    "ngrok_reserved_domain": ""
+  },
+  "features": {
+    "codex_integration_enabled": false
+  }
+}

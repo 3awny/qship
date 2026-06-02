@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security / data leak
+    url: https://github.com/3awny/qship/security/advisories/new
+    about: Real customer data, secrets, or PII visible in a rendered template. NEVER file as a public issue.
+  - name: 💬 Question or design discussion
+    url: https://github.com/3awny/qship/discussions
+    about: Ask about adoption, design choices, contribution ideas, or how to adapt qship to your stack.

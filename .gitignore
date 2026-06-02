@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+
+# Editor scratch files
+*.swp
+*.tmp
+*~
+.idea/
+.vscode/
+
+# User-specific install state — never commit
+config.json
+answers/last-run.json
+answers/last-run.env
+answers/last-run.*
+**/*.bak.*
+
+# Secrets / credentials — never commit (belt-and-suspenders; qship references
+# env-var NAMES only, but a contributor's own stack files must never land here)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+.aws/
+.netrc
+
+# Build/test transient state
+.mypy_cache/
+.pytest_cache/
+
+# Eval run outputs (scored locally / pre-release; never committed)
+evals/results/
+
+# Node (if any contributor adds tooling later)
+node_modules/
+
+# Logs from local hook/setup runs
+*.log
+
+# Serena MCP project files (local tooling, never publish)
+.serena/

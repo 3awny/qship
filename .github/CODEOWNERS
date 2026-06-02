@@ -1,0 +1,6 @@
+# Code owners — auto-requested for review on every PR.
+# Syntax: <path pattern>  <owner...>   (later matches win)
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything in the repo.
+*       @3awny

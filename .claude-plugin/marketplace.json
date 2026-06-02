@@ -1,0 +1,25 @@
+{
+  "name": "qship",
+  "description": "Open-source mirror of the qship pipeline — Jira ticket to production PR in one slash command. Hook-enforced, resumable, parallel/epic-mode capable, with optional Codex CLI integration for diversified model review.",
+  "owner": {
+    "name": "Ahmed Awny",
+    "email": "ahmedawny.one@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "qship",
+      "description": "Bootstrapper for the qship pipeline. Installs a single configurator skill (/qship:configure) that walks you through ~25 questions about your codebase, then renders the 21-skill pipeline (plan / implement / TDD / review / E2E / PR) into your ~/.claude/skills/ tree. Hook-enforced, resumable, parallel/epic-mode capable. Works with both Claude Code and Codex CLI. Recommended companion plugins from anthropics/claude-plugins-official: superpowers, feature-dev, code-review, code-simplifier, pr-review-toolkit.",
+      "author": {
+        "name": "Ahmed Awny",
+        "email": "ahmedawny.one@gmail.com",
+        "url": "https://github.com/3awny"
+      },
+      "category": "workflow",
+      "source": {
+        "source": "github",
+        "repo": "3awny/qship"
+      },
+      "homepage": "https://github.com/3awny/qship"
+    }
+  ]
+}

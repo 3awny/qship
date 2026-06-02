@@ -1,0 +1,13 @@
+# External plugin marketplaces that qship depends on.
+# Format: <marketplace>	<install-command-arg>	<description>
+# Each line corresponds to ONE `/plugin marketplace add` + `/plugin install` pair.
+# setup.sh prints these to the terminal so the user can paste them into Claude Code.
+#
+# IMPORTANT: these are NOT installed automatically — Claude Code's /plugin
+# command is interactive and we don't want to run side effects on behalf of the user.
+
+anthropics/claude-plugins-official	superpowers	Anthropic's official superpowers marketplace — provides superpowers:code-reviewer, superpowers:writing-plans, superpowers:test-driven-development
+anthropics/claude-plugins-official	feature-dev	feature-dev:code-reviewer (used in Step 8.2)
+anthropics/claude-plugins-official	code-review	code-review:code-review (used in Step 13 final review)
+anthropics/claude-plugins-official	code-simplifier	code-simplifier:code-simplifier (Step 7.5)
+anthropics/claude-plugins-official	pr-review-toolkit	pr-review-toolkit (used by Step 11.5 verification + sibling reviewers)

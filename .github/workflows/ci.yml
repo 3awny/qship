@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege default for GITHUB_TOKEN; jobs opt into more only if needed.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate manifests + placeholders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install jq + envsubst (gettext)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq gettext
+
+      - name: Shell syntax check
+        run: |
+          bash -n setup.sh
+          bash -n uninstall.sh
+          bash -n scripts/lint-forbidden.sh
+          bash -n scripts/validate-placeholders.sh
+          bash -n scripts/check-no-local-leak.sh
+          bash -n scripts/githooks/pre-commit
+          bash -n hooks/first-run-check.sh
+
+      - name: No local install state committed
+        run: |
+          # Server-side backstop: a contributor's gitignored config.json /
+          # answers/* must never be tracked (catches a forced `git add -f`).
+          bad=$(git ls-files | grep -E '^(config\.json$|answers/last-run\.)' || true)
+          if [ -n "$bad" ]; then
+            echo "FAIL: local install state is tracked — these must stay gitignored:"
+            echo "$bad" | sed 's/^/  /'
+            exit 1
+          fi
+          echo "✓ no local config / answers files tracked"
+
+      - name: Validate config.example.json against schema
+        run: |
+          # Cheap sanity check — jq parses successfully + all required leaf keys present.
+          jq -e . config.example.json > /dev/null
+          jq -e . config.schema.json > /dev/null
+          echo "✓ JSON files parse"
+
+      - name: Validate placeholders (every {{TOKEN}} in templates is declared in config.example.json)
+        run: bash scripts/validate-placeholders.sh
+
+      - name: Dry-run install — single-repo (the default config)
+        run: |
+          # Render against the example config to confirm the install path
+          # doesn't error. Output goes to a scratch dir, not the runner's real $HOME.
+          TMPHOME=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home = $home | .codebase.skills_root = $skills' \
+             config.example.json > "$TMPHOME/test-config.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/test-config.json"
+          SKILL_COUNT=$(ls "$TMPHOME/.claude/skills/" | wc -l)
+          UNFILLED=$(grep -rEoh '\{\{[A-Z_]+\}\}' "$TMPHOME/.claude/skills/" 2>/dev/null | sort -u | wc -l)
+          echo "Single-repo: installed $SKILL_COUNT skills, $UNFILLED unfilled placeholders"
+          [ "$SKILL_COUNT" -ge 21 ] || { echo "FAIL: expected >=21 skills installed"; exit 1; }
+          [ "$UNFILLED" -eq 0 ]    || { echo "FAIL: $UNFILLED unfilled placeholders in rendered output"; exit 1; }
+          jq -e 'length == 1' "$TMPHOME/.claude/skills/qship/repos.json" >/dev/null || { echo "FAIL: expected 1 repo in repos.json"; exit 1; }
+
+      - name: Dry-run install — multi-repo (3-service synthetic config)
+        run: |
+          # Exercise the flexible repos[] path with a 3-service monorepo shape:
+          # one service with migrations, one without, one library. Catches any
+          # regressions where the rendered output assumes a fixed shape.
+          # The 21-skill pipeline core installs unconditionally regardless of repo shape.
+          TMPHOME=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home = $home | .codebase.skills_root = $skills
+              | .repos = [
+                  {name: "users-api",  kind: "service", schema: "users",   package: null, has_migrations: true,  runs_locally: true,  is_primary: true,  port: 8000},
+                  {name: "billing-api", kind: "service", schema: "billing", package: null, has_migrations: true,  runs_locally: true,  is_primary: false, port: 8001},
+                  {name: "shared-lib",  kind: "library", schema: null,      package: null, has_migrations: false, runs_locally: false, is_primary: false, port: null}
+                ]
+             ' \
+             config.example.json > "$TMPHOME/multi-repo-config.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/multi-repo-config.json"
+          SKILL_COUNT=$(ls "$TMPHOME/.claude/skills/" | wc -l)
+          UNFILLED=$(grep -rEoh '\{\{[A-Z_]+\}\}' "$TMPHOME/.claude/skills/" 2>/dev/null | sort -u | wc -l)
+          REPO_COUNT=$(jq -r 'length' "$TMPHOME/.claude/skills/qship/repos.json")
+          PRIMARY=$(jq -r '(.[] | select(.is_primary==true) | .name)' "$TMPHOME/.claude/skills/qship/repos.json")
+          echo "Multi-repo: installed $SKILL_COUNT skills, $UNFILLED unfilled placeholders, $REPO_COUNT repos in repos.json, primary=$PRIMARY"
+          [ "$SKILL_COUNT" -ge 21 ] || { echo "FAIL: expected >=21 skills installed"; exit 1; }
+          [ "$UNFILLED" -eq 0 ]    || { echo "FAIL: $UNFILLED unfilled placeholders"; exit 1; }
+          [ "$REPO_COUNT" -eq 3 ]  || { echo "FAIL: expected 3 repos in repos.json"; exit 1; }
+          [ "$PRIMARY" = "users-api" ] || { echo "FAIL: primary should be users-api, got $PRIMARY"; exit 1; }
+          # Verify {{PRIMARY_REPO_NAME}} resolved to users-api everywhere
+          grep -r 'users-api' "$TMPHOME/.claude/skills/qcheck/" >/dev/null || { echo "FAIL: PRIMARY_REPO_NAME not rendered in qcheck"; exit 1; }
+          # qshipmaster ships in the core pipeline (always installed)
+          [ -d "$TMPHOME/.claude/skills/qshipmaster" ] || { echo "FAIL: qshipmaster (core) not installed"; exit 1; }
+          [ "$SKILL_COUNT" -eq 21 ] || { echo "FAIL: expected exactly 21 skills, got $SKILL_COUNT"; exit 1; }
+
+
+      - name: Dry-run install — tracker=none (no Atlassian MCP)
+        run: |
+          # A user with no Jira must still get a clean install whose ticket-driven
+          # skills are wired for the inline/file path (not the Atlassian MCP).
+          TMPHOME=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home = $home | .codebase.skills_root = $skills
+              | .tracker.tracker_type = "none" | .tracker.atlassian_cloud_id = ""' \
+             config.example.json > "$TMPHOME/none.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/none.json"
+          UNFILLED=$(grep -rEoh '\{\{[A-Z_]+\}\}' "$TMPHOME/.claude/skills/" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+          [ "$UNFILLED" -eq 0 ] || { echo "FAIL: $UNFILLED unfilled placeholders in tracker=none install"; exit 1; }
+          grep -q 'tracker = none' "$TMPHOME/.claude/skills/qship/SKILL.md" || { echo "FAIL: tracker=none not rendered into qship"; exit 1; }
+          grep -q 'case "none" in' "$TMPHOME/.claude/skills/qship/hooks/qship-persist.sh" || { echo "FAIL: persist hook not wired for tracker=none"; exit 1; }
+          test -f "$TMPHOME/.claude/skills/qship/references/tracker-contract.md" || { echo "FAIL: tracker-contract.md (single source of truth) not installed"; exit 1; }
+          # rendered persist hook must be valid bash in none mode
+          bash -n "$TMPHOME/.claude/skills/qship/hooks/qship-persist.sh" || { echo "FAIL: rendered persist hook has a syntax error"; exit 1; }
+          echo "✓ tracker=none install renders the no-MCP / inline-ticket path + contract file"
+
+      - name: Validate eval scaffold (fixtures + rubric)
+        run: bash scripts/eval.sh --check
+
+      - name: Plugin manifest validation (Claude Code v2.x format)
+        run: |
+          # claude plugin validate requires the Claude Code CLI which isn't on
+          # GitHub-hosted runners.  Instead do a shape-only check via jq.
+          jq -e '.name and .plugins and .owner.name' .claude-plugin/marketplace.json > /dev/null
+          jq -e '.name and .version' .claude-plugin/plugin.json > /dev/null
+          echo "✓ Plugin manifests have required keys"
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0          # full history so gitleaks scans every commit
+      - name: gitleaks (pinned binary)
+        # Run the gitleaks binary directly instead of gitleaks-action@v2.
+        # The action calls GET /repos/.../pulls/:n/commits, which 403s
+        # ("Resource not accessible by integration") unless the workflow token
+        # is granted pull-requests: read — an avoidable failure mode. Running
+        # the binary in `git` mode scans full history with no API calls, and is
+        # the exact command maintainers validate locally, so CI == local.
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks version
+          ./gitleaks git . --no-banner --redact --exit-code 1

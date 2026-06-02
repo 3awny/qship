@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# qship contributor pre-commit hook.
+#
+# Install once (zero dependencies, no framework):
+#     git config core.hooksPath scripts/githooks
+#
+# It does two things, both about keeping YOUR local install out of the repo:
+#   1. Hard-blocks staging your local config / answers (even if force-added).
+#   2. Runs scripts/check-no-local-leak.sh — fails the commit if any of your
+#      onboarded values (company, repo names, home path, etc.) leaked into a
+#      tracked file instead of staying a {{PLACEHOLDER}}.
+#
+# CI enforces the same things server-side, so installing this is a convenience
+# (catch it before the push), not the only line of defence.
+
+set -uo pipefail
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+
+# 1. Never commit local install state.
+blocked="$(git diff --cached --name-only | grep -E '^(config\.json|answers/last-run\.(json|env))$' || true)"
+if [ -n "$blocked" ]; then
+  echo "❌ pre-commit: refusing to commit your local config (it holds your onboarded values):"
+  printf '%s\n' "$blocked" | sed 's/^/     /'
+  echo "   Unstage it:  git restore --staged $blocked"
+  exit 1
+fi
+
+# 2. Make sure none of your onboarded values leaked into a tracked file.
+if [ -x "$REPO_ROOT/scripts/check-no-local-leak.sh" ]; then
+  bash "$REPO_ROOT/scripts/check-no-local-leak.sh" || exit 1
+fi
+
+exit 0

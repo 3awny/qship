@@ -1,0 +1,318 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "qship config",
+  "description": "Schema for qship/config.json (and answers/last-run.json). Every key listed here must be present at install time \u2014 setup.sh and /qship:configure both write this shape. The build script consumes it via jq and passes the flattened values to envsubst.",
+  "type": "object",
+  "required": [
+    "identity",
+    "codebase",
+    "repos",
+    "tooling",
+    "local_db",
+    "tracker",
+    "github",
+    "env_var_names",
+    "state",
+    "features"
+  ],
+  "properties": {
+    "identity": {
+      "type": "object",
+      "required": [
+        "company_slug",
+        "company_slug_lower",
+        "company_slug_upper"
+      ],
+      "properties": {
+        "company_slug": {
+          "type": "string",
+          "description": "Short identifier used in /tmp/<slug>-qship state paths"
+        },
+        "company_slug_lower": {
+          "type": "string",
+          "description": "Lowercase form (auto-derived)"
+        },
+        "company_slug_upper": {
+          "type": "string",
+          "description": "Uppercase form (auto-derived)"
+        },
+        "company_domain": {
+          "type": "string",
+          "description": "Company domain (used in narrative)"
+        },
+        "user_name_or_blank": {
+          "type": "string"
+        },
+        "user_email_or_blank": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    },
+    "codebase": {
+      "type": "object",
+      "required": [
+        "user_home",
+        "skills_root",
+        "codebase_root",
+        "codebase_dir_name",
+        "codebase_path_prefix",
+        "default_branch"
+      ],
+      "properties": {
+        "user_home": {
+          "type": "string",
+          "description": "Absolute path to user's home dir"
+        },
+        "skills_root": {
+          "type": "string",
+          "description": "Where Claude skills live, usually ~/.claude/skills"
+        },
+        "codebase_root": {
+          "type": "string",
+          "description": "Absolute path to user's monorepo root"
+        },
+        "codebase_dir_name": {
+          "type": "string",
+          "description": "Basename of codebase_root"
+        },
+        "codebase_path_prefix": {
+          "type": "string",
+          "description": "Top-level source-tree dir inside each repo (e.g. src/, app/, packages/)"
+        },
+        "default_branch": {
+          "type": "string",
+          "description": "Default base branch (develop, main, etc.)"
+        }
+      }
+    },
+    "repos": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Flexible list of the user's repos. Single-repo apps put one entry. 12-service monorepos put twelve. Skills that need multi-repo coordination iterate this list; skills that need a specific repo flag (has_migrations, runs_locally) filter by that flag at runtime.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Repo directory name relative to codebase_root (or absolute path)"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "monolith",
+              "service",
+              "library",
+              "gateway",
+              "frontend",
+              "worker",
+              "test-harness",
+              "other"
+            ],
+            "description": "Hint about the repo's role. Free-form \u2014 skills only branch on flags below."
+          },
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SQL schema name owned by this repo, null if not applicable"
+          },
+          "package": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Python/JS package name for imports inside this repo, null if not applicable"
+          },
+          "has_migrations": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set true if this repo has Alembic migrations; qmigrationdevcheck iterates only over flagged repos"
+          },
+          "runs_locally": {
+            "type": "boolean",
+            "default": false,
+            "description": "Set true if qspinuplocal should start this repo's process for local E2E"
+          },
+          "is_primary": {
+            "type": "boolean",
+            "default": false,
+            "description": "The 'main' repo for skills that need a single default. Exactly one repo should set this."
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Default local dev port (used by qspinuplocal if runs_locally=true)"
+          }
+        }
+      }
+    },
+    "tooling": {
+      "type": "object",
+      "required": [
+        "primary_language",
+        "test_command",
+        "lint_command",
+        "format_command"
+      ],
+      "properties": {
+        "primary_language": {
+          "enum": [
+            "python",
+            "typescript",
+            "go",
+            "mixed"
+          ]
+        },
+        "test_command": {
+          "type": "string"
+        },
+        "lint_command": {
+          "type": "string"
+        },
+        "format_command": {
+          "type": "string"
+        }
+      }
+    },
+    "local_db": {
+      "type": "object",
+      "required": [
+        "local_db_user",
+        "local_db_host",
+        "local_db_port",
+        "local_dev_db_name",
+        "db_owner_role"
+      ],
+      "properties": {
+        "local_db_user": {
+          "type": "string"
+        },
+        "local_db_host": {
+          "type": "string"
+        },
+        "local_db_port": {
+          "type": "integer"
+        },
+        "local_dev_db_name": {
+          "type": "string"
+        },
+        "db_owner_role": {
+          "type": "string"
+        }
+      }
+    },
+    "tracker": {
+      "type": "object",
+      "required": [
+        "tracker_type",
+        "jira_project_key",
+        "example_ticket_id"
+      ],
+      "description": "Issue tracker the ticket-driven skills read from. `jira` uses the Atlassian MCP; `none` means no tracker \u2014 you paste the ticket/TRD text or pass a local file path, and skills skip all MCP calls. (linear / github are reserved for future provider support.)",
+      "properties": {
+        "tracker_type": {
+          "enum": [
+            "jira",
+            "none"
+          ],
+          "description": "Which issue tracker to use. `jira` = Atlassian MCP; `none` = inline/paste-a-file, no tracker MCP required."
+        },
+        "jira_project_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]+$",
+          "description": "Ticket-key prefix used in IDs/branch names/examples (e.g. PROJ, TASK, ABC). Named 'jira_*' for placeholder back-compat; applies to any tracker."
+        },
+        "example_ticket_id": {
+          "type": "string",
+          "description": "Example ticket id used in docs (e.g. PROJ-1)"
+        },
+        "atlassian_cloud_id": {
+          "type": "string",
+          "description": "Atlassian cloudId (jira only; blank to skip \u2014 resolved at runtime via getAccessibleAtlassianResources). Not a secret; the Jira credential lives in your Atlassian MCP connection, not here."
+        }
+      }
+    },
+    "github": {
+      "type": "object",
+      "required": [
+        "gh_host",
+        "gh_org"
+      ],
+      "properties": {
+        "gh_host": {
+          "type": "string",
+          "description": "GitHub host (github.com or a GHE hostname)"
+        },
+        "gh_org": {
+          "type": "string",
+          "description": "GitHub org name"
+        }
+      }
+    },
+    "env_var_names": {
+      "type": "object",
+      "required": [
+        "env_service_url_key",
+        "env_cloud_url_key",
+        "env_oauth_client_id_key",
+        "env_oauth_client_secret_key"
+      ],
+      "description": "Env-var KEY names for runtime config the user's stack reads (qship skills reference these by name in narrative).",
+      "properties": {
+        "env_service_url_key": {
+          "type": "string",
+          "default": "SERVICE_URL",
+          "description": "Env var your services use for an HTTP base-URL (e.g. SERVICE_URL, API_URL)"
+        },
+        "env_cloud_url_key": {
+          "type": "string",
+          "default": "CLOUD_URL"
+        },
+        "env_oauth_client_id_key": {
+          "type": "string",
+          "default": "OAUTH_CLIENT_ID"
+        },
+        "env_oauth_client_secret_key": {
+          "type": "string",
+          "default": "OAUTH_CLIENT_SECRET"
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "state_root"
+      ],
+      "properties": {
+        "state_root": {
+          "type": "string",
+          "description": "Where qship stores transient state, e.g. /tmp/<slug>-qship"
+        },
+        "ngrok_reserved_domain": {
+          "type": "string",
+          "description": "Your ngrok reserved subdomain (blank if not used)"
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "required": [
+        "codex_integration_enabled"
+      ],
+      "description": "Boolean opt-ins for stack-specific skill bundles. Setup.sh installs the matching skills only when the flag is true.",
+      "properties": {
+        "codex_integration_enabled": {
+          "type": "boolean",
+          "description": "Symlink skills into ~/.codex/skills/ as well"
+        }
+      }
+    }
+  }
+}

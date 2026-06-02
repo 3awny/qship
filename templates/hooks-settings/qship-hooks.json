@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-phase3-evidence.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-qe2etest-evidence.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-pre-pr-test-pass.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-epic-scope-coverage.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-phase3-critic.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/block-pr-create-in-epic-mode.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-pipeline-complete.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${SKILLS_ROOT}/qship/hooks/require-pipeline-complete.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
