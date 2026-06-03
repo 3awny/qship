@@ -12,6 +12,29 @@
 
 set -euo pipefail
 
+# --- Platform guard: native Windows is not supported -------------------------
+# qship shells out to POSIX tools (jq, envsubst, git, perl, psql) and POSIX bash
+# hooks, so native Windows shells (PowerShell, cmd, Git Bash, MSYS, Cygwin) won't
+# work. On Windows, run qship inside WSL2 — a real Linux environment where
+# everything behaves exactly as on Linux. WSL itself reports `uname -s` = "Linux",
+# so it passes this guard and runs normally.
+case "$(uname -s 2>/dev/null)" in
+  MINGW* | MSYS* | CYGWIN* | Windows*)
+    cat >&2 <<'WIN'
+qship needs a POSIX/Linux environment — native Windows (PowerShell, cmd, Git Bash,
+MSYS, Cygwin) is not supported. Run it inside WSL2:
+
+  1. In an admin PowerShell:  wsl --install            (reboot if prompted)
+  2. Open "Ubuntu" from Start, then install deps:
+       sudo apt-get update && sudo apt-get install -y jq gettext
+  3. Re-run qship inside WSL:  bash setup.sh
+
+WSL2 guide: https://learn.microsoft.com/windows/wsl/install
+WIN
+    exit 1
+    ;;
+esac
+
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TEMPLATES_ROOT="$REPO_ROOT/templates"
 DEPS_ROOT="$REPO_ROOT/deps"

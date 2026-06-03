@@ -113,6 +113,23 @@ Both render skills into `~/.claude/skills/<name>/` (and symlink into `~/.codex/s
 bash setup.sh --check     # tooling, rendered skills, repos.json, required plugins → exit 0 if healthy
 ```
 
+### Windows (WSL2)
+
+qship is POSIX `bash` — run it inside **[WSL2](https://learn.microsoft.com/windows/wsl/install)** (a real Linux environment on Windows), **not** native PowerShell/cmd. `setup.sh` detects native Windows shells and points you here.
+
+```powershell
+wsl --install            # admin PowerShell; reboot if prompted
+```
+
+Then open **Ubuntu** from the Start menu and run the Linux steps:
+
+```bash
+sudo apt-get update && sudo apt-get install -y jq gettext
+git clone https://github.com/3awny/qship.git && cd qship && bash setup.sh
+```
+
+WSL2 is also where Claude Code's OS-level sandbox works — recommended for qship's unattended mode.
+
 ## Configure it for your codebase
 
 **Repos — any shape.** No hardcoded `core`/`app` slots; declare 1 repo or 100 as a `repos[]` array. Per-repo flags opt a repo into the skills that need it:
