@@ -1,7 +1,7 @@
 {
   "name": "qship",
   "description": "Bootstrapper for the qship pipeline. Installs a single configurator skill that walks you through ~25 questions about your codebase, then renders the 21-skill qship pipeline (plan/implement/review/test/ship) into your ~/.claude/skills/ tree. Hook-enforced, resumable, parallel/epic-mode capable. Supports both Claude Code and Codex CLI.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "keywords": ["claude-code", "agent-skills", "codex-cli", "jira", "tdd", "code-review", "autonomous-agent", "developer-tools"],
   "license": "MIT",
   "author": {
