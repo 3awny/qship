@@ -4,6 +4,25 @@ All notable changes to qship are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project is pre-1.x
 community software and only the latest `main` is supported.
 
+## [1.0.1] — 2026-06-05
+
+### Fixed
+- **`codex_integration_enabled: false` is now respected.** `load_json_config`
+  flattened scalar leaves with `getpath($p) // ""`, but jq's `//` treats `false`
+  as empty — so a `false` flag exported as `""` and fell back to the
+  `command -v codex` default, making it impossible to disable Codex linking from
+  config. Booleans are now preserved (`null → ""`, `false → "false"`) so the
+  `true/false → y/n` mapping works.
+- **Codex linking no longer touches the real `~/.codex` from an isolated install,
+  and never clobbers your own symlinks.** The step wrote to a hardcoded
+  `$HOME/.codex` (ignoring `CLAUDE_CONFIG_DIR`) and `ln -sfn`'d over any existing
+  link with no backup. It now honours `CODEX_HOME` for isolation and backs up any
+  pre-existing non-qship entry to `<link>.bak.<epoch>` before linking.
+- **`SKILLS_ROOT` defaults to `$CLAUDE_DIR/skills`** (was a hardcoded
+  `$HOME/.claude/skills`), so setting `CLAUDE_CONFIG_DIR` alone now fully isolates
+  an install — skills, settings, and agents all land together — matching the
+  documented intent and `setup.sh --check`. No-op for a normal install.
+
 ## [1.0.0] — 2026-05-31
 
 First public release — the open-source, scrubbed distribution of a private

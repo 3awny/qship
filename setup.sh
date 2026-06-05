@@ -248,7 +248,11 @@ load_json_config() {
     | select($p[0] != "repos")
     | $p[-1] as $leaf
     | select(($leaf | tostring) | test("^[_$]") | not)
-    | [$leaf, (getpath($p) // "" | tostring)]
+    # NB: `getpath($p) // ""` would be wrong here — jq treats BOTH null AND
+    # `false` as empty, so a `false` leaf (e.g. codex_integration_enabled)
+    # would export as "" and lose the value. Map only null -> "" and stringify
+    # everything else, so booleans survive for the y/n normalisation below.
+    | [$leaf, (getpath($p) | if . == null then "" else tostring end)]
     | @tsv
   ' "$f")
   # repos[] — export as JSON string + helpers
@@ -353,7 +357,11 @@ log
 log "==> Questionnaire (press Enter to accept the [default])"
 log
 USER_HOME="${USER_HOME:-$HOME}"
-SKILLS_ROOT="${SKILLS_ROOT:-$HOME/.claude/skills}"
+# Default skills under CLAUDE_DIR (honours CLAUDE_CONFIG_DIR) — NOT a hardcoded
+# $HOME/.claude — so a single CLAUDE_CONFIG_DIR=/tmp/x fully isolates an install
+# (skills, settings, agents all land together) and matches `setup.sh --check`.
+# For a normal install CLAUDE_DIR == $HOME/.claude, so this is a no-op there.
+SKILLS_ROOT="${SKILLS_ROOT:-$CLAUDE_DIR/skills}"
 
 CODEBASE_ROOT="$(prompt_or_default CODEBASE_ROOT 'Absolute path to your monorepo root' "$HOME/work/$(basename "$PWD")")"
 CODEBASE_DIR_NAME="$(basename "$CODEBASE_ROOT")"
@@ -654,22 +662,43 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Codex symlinks (optional)
+# 6. Codex symlinks (optional — gated on codex_integration_enabled)
 # ---------------------------------------------------------------------------
-if [[ "$CODEX_INTEGRATION_ENABLED" == "y" && -d "$HOME/.codex" ]]; then
+# Honours CODEX_HOME so an isolated install (e.g. a test with CLAUDE_CONFIG_DIR
+# set) can redirect Codex linking away from the real ~/.codex. And we NEVER
+# silently clobber a symlink that isn't already one of ours: if anything else
+# lives at the target, it's backed up to <link>.bak.<epoch> first, so a name
+# collision with the user's own Codex skill is always recoverable.
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+if [[ "$CODEX_INTEGRATION_ENABLED" == "y" && -d "$CODEX_DIR" ]]; then
   log
-  log "==> Linking skills into ~/.codex/skills/"
-  mkdir -p "$HOME/.codex/skills"
+  log "==> Linking skills into $CODEX_DIR/skills/"
+  $DRY_RUN || mkdir -p "$CODEX_DIR/skills"
   for skill in "${INSTALLED[@]}"; do
     target="$SKILLS_ROOT/$skill"
-    link="$HOME/.codex/skills/$skill"
+    link="$CODEX_DIR/skills/$skill"
     if $DRY_RUN; then
       log "  [dry-run] would symlink: $link -> $target"
-    else
-      ln -sfn "$target" "$link"
+      continue
     fi
+    # Preserve anything already there that isn't one of OUR links (i.e. doesn't
+    # already resolve into SKILLS_ROOT) — back it up rather than overwrite it.
+    if [[ -e "$link" || -L "$link" ]]; then
+      existing="$(readlink "$link" 2>/dev/null || true)"
+      case "$existing" in
+        "$SKILLS_ROOT"/*) : ;;   # a prior qship link — safe to refresh in place
+        *)
+          backup="$link.bak.$(date +%s)"
+          mv "$link" "$backup"
+          warn "Preserved existing $link -> $backup (was: ${existing:-<not a symlink>})"
+          ;;
+      esac
+    fi
+    ln -sfn "$target" "$link"
   done
-  ok "Codex symlinks updated"
+  ok "Codex symlinks updated under $CODEX_DIR/skills/"
+elif [[ "$CODEX_INTEGRATION_ENABLED" == "y" && ! -d "$CODEX_DIR" ]]; then
+  warn "codex_integration_enabled is set but $CODEX_DIR not found — skipping Codex linking."
 fi
 
 # ---------------------------------------------------------------------------

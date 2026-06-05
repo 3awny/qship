@@ -128,6 +128,43 @@ jobs:
           bash -n "$TMPHOME/.claude/skills/qship/hooks/qship-persist.sh" || { echo "FAIL: rendered persist hook has a syntax error"; exit 1; }
           echo "✓ tracker=none install renders the no-MCP / inline-ticket path + contract file"
 
+      - name: Codex linking — flag respected, isolated to CODEX_HOME, no clobber
+        run: |
+          # Regression test for two Codex-linking bugs fixed in 1.0.1:
+          #  (1) codex_integration_enabled:false must actually skip linking.
+          #  (2) linking must honour CODEX_HOME (never the real ~/.codex) and
+          #      back up a pre-existing non-qship symlink instead of clobbering it.
+          set -euo pipefail
+
+          # (1) flag=false => no linking, even though a Codex dir exists.
+          TMPHOME=$(mktemp -d); CODEX=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents" "$CODEX/skills"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home=$home | .codebase.skills_root=$skills | .features.codex_integration_enabled=false' \
+             config.example.json > "$TMPHOME/cfg-false.json"
+          HOME="$TMPHOME" CODEX_HOME="$CODEX" bash setup.sh --config "$TMPHOME/cfg-false.json" >/dev/null
+          if [ -n "$(ls -A "$CODEX/skills")" ]; then
+            echo "FAIL: codex_integration_enabled=false still created links:"; ls -A "$CODEX/skills"; exit 1
+          fi
+          echo "✓ flag=false => no Codex links created"
+
+          # (2) flag=true => links land in CODEX_HOME; pre-existing non-qship link preserved.
+          TMPHOME=$(mktemp -d); CODEX=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents" "$CODEX/skills"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          ln -s /some/unrelated/qcheck "$CODEX/skills/qcheck"   # a link the user already had
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home=$home | .codebase.skills_root=$skills | .features.codex_integration_enabled=true' \
+             config.example.json > "$TMPHOME/cfg-true.json"
+          HOME="$TMPHOME" CODEX_HOME="$CODEX" bash setup.sh --config "$TMPHOME/cfg-true.json" >/dev/null
+          [ ! -e "$TMPHOME/.codex" ] || { echo "FAIL: linking leaked into \$HOME/.codex"; exit 1; }
+          [ -L "$CODEX/skills/qship" ] || { echo "FAIL: qship link not created under CODEX_HOME"; exit 1; }
+          [ "$(readlink "$CODEX/skills/qship")" = "$TMPHOME/.claude/skills/qship" ] || { echo "FAIL: qship link target wrong"; exit 1; }
+          ls "$CODEX/skills"/qcheck.bak.* >/dev/null 2>&1 || { echo "FAIL: pre-existing qcheck was not backed up"; exit 1; }
+          [ "$(readlink "$CODEX"/skills/qcheck.bak.*)" = "/some/unrelated/qcheck" ] || { echo "FAIL: backup lost original target"; exit 1; }
+          echo "✓ flag=true => isolated to CODEX_HOME, real \$HOME/.codex untouched, non-qship link backed up"
+
       - name: Validate eval scaffold (fixtures + rubric)
         run: bash scripts/eval.sh --check
 
