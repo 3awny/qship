@@ -165,6 +165,39 @@ jobs:
           [ "$(readlink "$CODEX"/skills/qcheck.bak.*)" = "/some/unrelated/qcheck" ] || { echo "FAIL: backup lost original target"; exit 1; }
           echo "✓ flag=true => isolated to CODEX_HOME, real \$HOME/.codex untouched, non-qship link backed up"
 
+      - name: Phase 3 heading normalization — near-miss heals, substance still gates
+        run: |
+          # A cosmetic Phase 3 heading slip must not HALT a wave/epic whose
+          # /qe2etest substance is real, but normalization must NOT let a
+          # mislabeled pytest-only section through (it relaxes no substance gate).
+          set -euo pipefail
+          TMPHOME=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home=$home | .codebase.skills_root=$skills' \
+             config.example.json > "$TMPHOME/cfg.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/cfg.json" >/dev/null
+          LIB="$TMPHOME/.claude/skills/qship/hooks/qship-evidence-lib.sh"
+          D=$(mktemp -d)
+          printf '## Phase 3 E2E\nRan /qe2etest.\n| S1 | qe2etest:GET /a | a.txt | PASS |\n' > "$D/near.md"
+          printf '## Phase 3 Tests\n| S1 | pytest tests/x.py | o.txt | PASS |\n'          > "$D/pytest.md"
+          printf '## Phase 30 Roadmap\nnot a phase-3 heading\n'                           > "$D/p30.md"
+          source "$LIB"
+          # near-miss + real substance → heading heals AND validates
+          normalize_phase3_heading "$D/near.md"
+          grep -qF '## Phase 3 — /qe2etest evidence' "$D/near.md" || { echo "FAIL: near-miss heading not normalized"; exit 1; }
+          validate_qe2etest_evidence "$D/near.md" near || { echo "FAIL: normalized near-miss with real substance should validate"; exit 1; }
+          # mislabeled pytest-only → heading rewritten BUT substance still rejects
+          normalize_phase3_heading "$D/pytest.md"
+          if validate_qe2etest_evidence "$D/pytest.md" pytest 2>/dev/null; then
+            echo "FAIL: pytest-only section passed after normalization — substance gate broken"; exit 1
+          fi
+          # "Phase 30" must be left untouched (word-boundary guard)
+          normalize_phase3_heading "$D/p30.md"
+          grep -qF '## Phase 30 Roadmap' "$D/p30.md" || { echo "FAIL: 'Phase 30' wrongly rewritten"; exit 1; }
+          echo "✓ near-miss heading heals + validates; pytest-only still rejected; 'Phase 30' untouched"
+
       - name: Validate eval scaffold (fixtures + rubric)
         run: bash scripts/eval.sh --check
 
