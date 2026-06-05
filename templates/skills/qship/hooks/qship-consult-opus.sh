@@ -172,7 +172,7 @@ build_auto_context() {
         #    worktree mtime-sorted top-3.
         if [ -d "$td" ]; then
             echo "## Recent worktree logs (tail of top 3 by mtime)"
-            for f in $(find "$td" -maxdepth 2 -type f \( -name '*.log' -o -name '*.txt' \) 2>/dev/null | xargs -I{} stat -f '%m %N' {} 2>/dev/null | sort -rn | head -3 | awk '{print $2}'); do
+            for f in $(find "$td" -maxdepth 2 -type f \( -name '*.log' -o -name '*.txt' \) 2>/dev/null | xargs -I{} sh -c 'stat -f "%m %N" "$1" 2>/dev/null || stat -c "%Y %n" "$1" 2>/dev/null' _ {} | sort -rn | head -3 | awk '{print $2}'); do
                 echo "### $f"
                 tail -c 4000 "$f"
                 echo ""
@@ -215,8 +215,8 @@ else
             echo ""
             echo "## DELTA since snapshot (changes between this consult and the previous one)"
             local snapshot_age_sec
-            if stat -f '%m' "$SNAPSHOT" >/dev/null 2>&1; then
-                snapshot_age_sec=$(( $(date +%s) - $(stat -f '%m' "$SNAPSHOT") ))
+            if stat -f '%m' "$SNAPSHOT" >/dev/null 2>&1 || stat -c '%Y' "$SNAPSHOT" >/dev/null 2>&1; then
+                snapshot_age_sec=$(( $(date +%s) - $(stat -f '%m' "$SNAPSHOT" 2>/dev/null || stat -c '%Y' "$SNAPSHOT") ))
                 echo "Snapshot age: ${snapshot_age_sec}s"
             fi
             local repo_root="${REPO_ROOT:-{{CODEBASE_ROOT}}}"
@@ -234,9 +234,9 @@ else
             if [ -n "$branch_repo" ]; then
                 echo "### New commits since snapshot ($branch_repo):"
                 local snap_ts
-                snap_ts=$(stat -f '%m' "$SNAPSHOT" 2>/dev/null || echo 0)
+                snap_ts=$(stat -f '%m' "$SNAPSHOT" 2>/dev/null || stat -c '%Y' "$SNAPSHOT" 2>/dev/null || echo 0)
                 local snap_iso
-                snap_iso=$(date -r "$snap_ts" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "1970-01-01T00:00:00")
+                snap_iso=$(date -r "$snap_ts" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || date -d "@$snap_ts" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || echo "1970-01-01T00:00:00")
                 git log --oneline --since="$snap_iso" 2>/dev/null | head -10 || true
                 echo "### Current uncommitted diff stat:"
                 git diff --stat 2>/dev/null | head -10 || true

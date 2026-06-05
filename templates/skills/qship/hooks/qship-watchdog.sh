@@ -50,14 +50,18 @@ STALL=0
 REASONS=()
 
 # 1. Newest file under the worktree (excluding noise)
-# macOS BSD find doesn't support -printf; use a portable two-step approach.
+# macOS BSD find doesn't support -printf; pipe to stat instead. stat itself
+# differs by platform (BSD: `stat -f "%m %N"`; GNU/Linux: `stat -c "%Y %n"`),
+# so try BSD then fall back to GNU — otherwise this stall signal silently
+# returns nothing under WSL2/Linux and the detector degrades to CPU-only.
 NEWEST_FILE_PATH=$(find "$WT" -type f \
   -not -path '*/.git/*' \
   -not -path '*/__pycache__/*' \
   -not -path '*/venv/*' \
   -not -path '*/node_modules/*' \
   -not -name '*.pyc' 2>/dev/null \
-  | xargs -I {} stat -f "%m %N" {} 2>/dev/null | sort -rn | head -1)
+  | xargs -I {} sh -c 'stat -f "%m %N" "$1" 2>/dev/null || stat -c "%Y %n" "$1" 2>/dev/null' _ {} \
+  | sort -rn | head -1)
 NEWEST_FILE_TS=${NEWEST_FILE_PATH%% *}
 NEWEST_FILE_PATH=${NEWEST_FILE_PATH#* }
 if [ -n "$NEWEST_FILE_TS" ]; then
