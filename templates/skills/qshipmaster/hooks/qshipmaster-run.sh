@@ -469,9 +469,9 @@ PHASE 3 (E2E) — HARD REQUIREMENT (I1 invariant, hook-enforced):
 
 The evidence file you must populate is at this EXACT path (memorize, do not abbreviate, do not shorten, do not change ANY character):
 
-  {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-\${WAVE_N}-phase23-evidence.md
+  $EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md
 
-Spelled out: the directory is {{STATE_ROOT}}/epic-<EPIC_ID>/ (where <EPIC_ID> is literally the epic Jira ID like {{JIRA_PROJECT_KEY}}-EX06), and the file is wave-<N>-phase23-evidence.md (note "phase23" not "phase3" — the "2" is part of the filename). DO NOT write to wave-N-evidence.md or wave3-evidence.md or any shortened variant. The orchestrator's validator hook greps for content at this exact path; any other path is invisible to it and the wave will HALT.
+Spelled out: $EPIC_DIR resolves to {{STATE_ROOT}}/epic-<EPIC_ID>/ for THIS epic (the orchestrator interpolates it — the path above is already the concrete absolute path you must use), and the file is wave-<N>-phase23-evidence.md for THIS wave (note "phase23" not "phase3" — the "2" is part of the filename). DO NOT write to wave-N-evidence.md or wave3-evidence.md or any shortened variant, and DO NOT swap in a different epic or wave id — write to the exact absolute path shown above. The orchestrator's validator hook greps for content at that exact path; any other path is invisible to it and the wave will HALT.
 
 Procedure:
 
@@ -479,11 +479,11 @@ Procedure:
      nohup env DEV_MODE=true python serve.py > /tmp/server-wave-\${WAVE_N}.log 2>&1 < /dev/null & disown
    Poll readiness: \`for i in {1..30}; do curl -sf http://localhost:8001/health >/dev/null && break; sleep 2; done\`. If no health 200 within 60s, document in wave-\${WAVE_N}-blocked.md and surface — do NOT proceed with a partial stack.
 
-8. Invoke the /qe2etest skill via the Skill tool: \`Skill(skill="qe2etest")\`. The skill itself drives the scenario execution against the running local stack. Capture its FULL output via tee to {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-\${WAVE_N}-qe2etest.log. Per-scenario artifacts (curl response bodies, Playwright screenshots, psql verify blocks) go under {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-\${WAVE_N}-qe2etest-artifacts/.
+8. Invoke the /qe2etest skill via the Skill tool: \`Skill(skill="qe2etest")\`. The skill itself drives the scenario execution against the running local stack. Capture its FULL output via tee to $EPIC_DIR/wave-${WAVE_N}-qe2etest.log. Per-scenario artifacts (curl response bodies, Playwright screenshots, psql verify blocks) go under $EPIC_DIR/wave-${WAVE_N}-qe2etest-artifacts/.
 
-   HEARTBEAT — every 5 minutes, touch {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-\${WAVE_N}-heartbeat.txt with the current scenario name. Supervisor uses this file's mtime to distinguish "claude blocked in long pytest" from "claude actually hung".
+   HEARTBEAT — every 5 minutes, touch $EPIC_DIR/wave-${WAVE_N}-heartbeat.txt with the current scenario name. Supervisor uses this file's mtime to distinguish "claude blocked in long pytest" from "claude actually hung".
 
-9. AFTER /qe2etest returns, append a section to wave-\${WAVE_N}-phase23-evidence.md with the EXACT LITERAL heading:
+9. AFTER /qe2etest returns, append a section to $EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md with the EXACT LITERAL heading:
 
    ## Phase 3 — /qe2etest evidence
 
@@ -493,8 +493,8 @@ Procedure:
 
    | ID | Method | Artifact path | Verdict |
    |---|---|---|---|
-   | S1 | qe2etest:GET /api/v1/policies/peers | {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-${WAVE_N}-qe2etest-artifacts/s1-curl.txt | PASS |
-   | S2 | qe2etest:Playwright RecordList badge render | {{STATE_ROOT}}/epic-{{JIRA_PROJECT_KEY}}-EX06/wave-${WAVE_N}-qe2etest-artifacts/s2-screenshot.png | PASS |
+   | S1 | qe2etest:GET /api/v1/policies/peers | $EPIC_DIR/wave-${WAVE_N}-qe2etest-artifacts/s1-curl.txt | PASS |
+   | S2 | qe2etest:Playwright RecordList badge render | $EPIC_DIR/wave-${WAVE_N}-qe2etest-artifacts/s2-screenshot.png | PASS |
 
    Critical: the "Method" column of EACH row MUST start with \`qe2etest:\` (or \`/qe2etest\`). Rows that start with \`pytest:\`, \`curl:\` (without the qe2etest: prefix), \`psql:\`, \`TestClient:\` will trigger the banlist rejection — the validator sees zero qe2etest rows and refuses the file.
 
