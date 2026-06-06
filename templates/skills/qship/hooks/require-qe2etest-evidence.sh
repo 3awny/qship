@@ -46,8 +46,9 @@ cmd=$(echo "$hook_input" | jq -r '.tool_input.command // ""' 2>/dev/null || true
 # Stripping env-var assignments + leading whitespace, then word-boundary match:
 clean_cmd=$(echo "$cmd" | sed -E 's/^[[:space:]]*([A-Z_][A-Z0-9_]*=[^[:space:]]+[[:space:]]+)*//' | head -c 200)
 
-# Use grep -E with word anchors; only the LEADING command words count.
-if ! echo "$clean_cmd" | grep -qE '^(gh pr create\b|gh pr comment\b|git push\b)'; then
+# Use grep -E with POSIX word anchors; only the LEADING command words count.
+# (\b is unsafe in BSD grep / awk — see BUG-5 rule — so use ([^[:alnum:]]|$).)
+if ! echo "$clean_cmd" | grep -qE '^(gh pr create([^[:alnum:]]|$)|gh pr comment([^[:alnum:]]|$)|git push([^[:alnum:]]|$))'; then
   emit_continue
 fi
 

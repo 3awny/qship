@@ -529,7 +529,7 @@ fi
 
 # NEW: require positive verdict line — "Verdict: SHIPPABLE" or equivalent.
 # An empty file lacking BOTH NOT_SHIPPABLE and SHIPPABLE will be caught here.
-if ! grep -qE '^-?[[:space:]]*Verdict:[[:space:]]*SHIPPABLE\b' "$EPIC_PHASE3_EVIDENCE"; then
+if ! grep -qE '^-?[[:space:]]*Verdict:[[:space:]]*SHIPPABLE([^[:alnum:]]|$)' "$EPIC_PHASE3_EVIDENCE"; then
     echo "[$(ts)] HALT: epic Phase 3 evidence has no explicit \"Verdict: SHIPPABLE\" line — refusing to create PRs. This blocks the {{JIRA_PROJECT_KEY}}-EX06-class regression where claude returned mid-execution and left an empty table. Re-run Phase 3 (matrix exec) until evidence carries a positive verdict, OR ESCALATE to user." | tee -a "$LOG"
     state_set "$EPIC" '.status' 'blocked'
     state_set "$EPIC" '.error' "epic-end Phase 3: missing 'Verdict: SHIPPABLE' line (likely empty scenario table)"
