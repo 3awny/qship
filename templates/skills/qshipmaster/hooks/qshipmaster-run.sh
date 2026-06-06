@@ -576,6 +576,10 @@ NON-NEGOTIABLE:
         source "$QSHIP_HOOKS_DIR/qship-evidence-lib.sh"
         wave_diff_ref="${BASE_BRANCH}..HEAD"
         wave_repo_dir="$REPO_ROOT/${REPOS[0]}"
+        # Canonicalise a near-miss Phase 3 heading before validating so a
+        # cosmetic wording slip can't HALT a wave whose /qe2etest substance is
+        # real — the validator's substance gates still decide. (See lib.)
+        normalize_phase3_heading "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md"
         if ! validate_qe2etest_evidence \
                 "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md" \
                 "wave $WAVE_N" \

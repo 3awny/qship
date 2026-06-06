@@ -220,6 +220,47 @@ phase3_has_missing_e2e() {
 }
 
 # --------------------------------------------------------------------------
+# normalize_phase3_heading — canonicalise a near-miss Phase 3 heading.
+#
+# validate_qe2etest_evidence (below) hard-requires the EXACT literal heading
+# `## Phase 3 — /qe2etest evidence` — used BOTH for the presence check AND for
+# awk section extraction. A cosmetic wording slip in the agent-written evidence
+# (e.g. "## PHASE 3 — E2E", "## Phase 3 E2E", or a hyphen where the em-dash
+# belongs) would HALT a wave/epic whose /qe2etest SUBSTANCE is real.
+#
+# This rewrites the FIRST level-2 "Phase 3" heading to the canonical literal so
+# the substance gates (/qe2etest invocation + PASS verdict + banlist) decide
+# validity, not the heading wording. No-op if the literal is already present or
+# no such heading exists. Relaxes NO check — a mislabeled pytest-only section is
+# still rejected on substance.
+#
+# It MUTATES the evidence file, so call it from the ORCHESTRATOR (run.sh /
+# deliver.sh) right before validating. The read-only Stop hook then sees the
+# already-canonical file and never has to rewrite anything itself.
+# --------------------------------------------------------------------------
+normalize_phase3_heading() {
+  local file="$1"
+  [ -f "$file" ] || return 0
+  # Already canonical → nothing to do (and avoids a needless rewrite).
+  grep -qF '## Phase 3 — /qe2etest evidence' "$file" 2>/dev/null && return 0
+  local tmp="${file}.heading.tmp"
+  # toupper() makes the match case-insensitive; ([^0-9]|$) is the portable
+  # stand-in for a word boundary after "3" (BSD awk has no \b) so a real
+  # "## Phase 30 ..." heading is left alone. Only the first match is rewritten.
+  if awk '
+        BEGIN { done = 0 }
+        !done && toupper($0) ~ /^## +PHASE 3([^0-9]|$)/ {
+          print "## Phase 3 — /qe2etest evidence"; done = 1; next
+        }
+        { print }
+      ' "$file" > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# --------------------------------------------------------------------------
 # validate_qe2etest_evidence — wave/epic-level evidence validator.
 #
 # Enforces invariant I1 + I8 from qshipmaster SKILL.md: Phase 3 evidence MUST

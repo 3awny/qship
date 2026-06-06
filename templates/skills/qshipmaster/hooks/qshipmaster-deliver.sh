@@ -560,6 +560,10 @@ if [ -f "$QSHIP_HOOKS_DIR/qship-evidence-lib.sh" ]; then
     source "$QSHIP_HOOKS_DIR/qship-evidence-lib.sh"
     epic_diff_ref="${BASE_BRANCH:-develop}..HEAD"
     epic_repo_dir="$REPO_ROOT/${REPOS[0]}"
+    # Canonicalise a near-miss Phase 3 heading before validating (see lib) so a
+    # cosmetic wording slip can't HALT epic delivery when the /qe2etest
+    # substance is real — the validator's substance gates still decide.
+    normalize_phase3_heading "$EPIC_PHASE3_EVIDENCE"
     if ! validate_qe2etest_evidence \
             "$EPIC_PHASE3_EVIDENCE" \
             "epic" \
