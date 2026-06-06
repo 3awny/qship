@@ -228,6 +228,48 @@ jobs:
           if validate_qe2etest_evidence "$D/nolog.md" n 2>/dev/null; then echo "FAIL: no-log near-miss must not pass"; exit 1; fi
           echo "✓ proven run heals invocation near-miss; missing log never fabricates; substance still gates"
 
+      - name: Phase 3 PASS-verdict normalization — SHIPPABLE heals, hedged prose never fabricates
+        run: |
+          # A real /qe2etest pass recorded as "Verdict: SHIPPABLE" + decorated
+          # PASS cells must validate; a hedged verdict with no SHIPPABLE must NOT
+          # be turned into a PASS (no fabrication).
+          set -euo pipefail
+          TMPHOME=$(mktemp -d); mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home=$home | .codebase.skills_root=$skills' \
+             config.example.json > "$TMPHOME/cfg.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/cfg.json" >/dev/null
+          LIB="$TMPHOME/.claude/skills/qship/hooks/qship-evidence-lib.sh"
+          D=$(mktemp -d); source "$LIB"
+          # SHIPPABLE + decorated PASS cells + run-log → must heal + validate
+          printf '## Phase 3 — /qe2etest evidence\nRan /qe2etest.\n| S1 | qe2etest:GET /a | a.txt | PASS (verified) |\nVerdict: SHIPPABLE\n' > "$D/ship.md"
+          echo 'real /qe2etest output' > "$D/ship.log"
+          validate_qe2etest_evidence "$D/ship.md" s 2>/dev/null && { echo "FAIL: decorated PASS should reject before heal"; exit 1; }
+          ensure_qe2etest_pass_summary "$D/ship.md" "$D/ship.log"
+          validate_qe2etest_evidence "$D/ship.md" s || { echo "FAIL: SHIPPABLE + log should validate after heal"; exit 1; }
+          # hedged verdict, NO SHIPPABLE → must NOT fabricate a PASS
+          printf '## Phase 3 — /qe2etest evidence\nRan /qe2etest.\n| S1 | qe2etest:GET /a | a.txt | PASS (verified) |\nVerdict: Ready with caveats\n' > "$D/hedge.md"
+          echo 'real /qe2etest output' > "$D/hedge.log"
+          ensure_qe2etest_pass_summary "$D/hedge.md" "$D/hedge.log"
+          grep -qiE 'all scenarios PASS' "$D/hedge.md" && { echo "FAIL: fabricated a PASS from hedged prose"; exit 1; }
+          echo "✓ SHIPPABLE+log heals decorated PASS; hedged prose never fabricates"
+
+      - name: No Perl regex escapes in awk / POSIX grep (BUG-5 rule)
+        run: |
+          # \b \d \w \s fail SILENTLY in awk and BSD/POSIX grep, so a guard that
+          # uses them no-ops without erroring. Forbid them in executable shell
+          # (full-line comments + the one python re.search line are exempt).
+          hits=$(grep -rnE '\\[bdwsBDWS]' templates/skills --include='*.sh' \
+                  | grep -vE ':[0-9]+:[[:space:]]*#' | grep -v 're\.S' || true)
+          if [ -n "$hits" ]; then
+            echo "FAIL: Perl regex escape in awk/grep code — use POSIX classes"
+            echo "      ([[:space:]], [[:digit:]], ([^0-9]|\$), (^|[^[:alnum:]]) …):"
+            echo "$hits"
+            exit 1
+          fi
+          echo "✓ no Perl escapes (\\b \\d \\w \\s) in awk/POSIX-grep code"
+
       - name: Validate eval scaffold (fixtures + rubric)
         run: bash scripts/eval.sh --check
 

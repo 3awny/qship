@@ -223,7 +223,7 @@ for WAVE_N in $(seq 1 "$WAVE_COUNT"); do
             fi
 
             # Skip if a persist process is already running for this ticket
-            if pgrep -f "qship-persist.sh $ticket\b" >/dev/null 2>&1; then
+            if pgrep -f "qship-persist.sh $ticket([^0-9]|$)" >/dev/null 2>&1; then
                 log "  $ticket: persist process already running — skipping spawn"
                 continue
             fi
@@ -348,7 +348,7 @@ for WAVE_N in $(seq 1 "$WAVE_COUNT"); do
                 for stuck in "${pending_list[@]}"; do
                     stuck_ticket="${stuck%%(*}"
                     # Find the persist PID for this ticket and kill its pgroup.
-                    persist_pid=$(pgrep -f "qship-persist.sh $stuck_ticket\b" | head -1)
+                    persist_pid=$(pgrep -f "qship-persist.sh $stuck_ticket([^0-9]|$)" | head -1)
                     if [ -n "$persist_pid" ]; then
                         pgid=$(ps -o pgid= -p "$persist_pid" 2>/dev/null | tr -d ' ')
                         if [ -n "$pgid" ] && [ "$pgid" != "$$" ]; then
@@ -356,7 +356,7 @@ for WAVE_N in $(seq 1 "$WAVE_COUNT"); do
                         fi
                     fi
                     # Belt-and-braces fallback in case pgroup kill missed.
-                    pkill -KILL -f "qship-persist.sh $stuck_ticket\b" 2>/dev/null || true
+                    pkill -KILL -f "qship-persist.sh $stuck_ticket([^0-9]|$)" 2>/dev/null || true
                     pgrep -f "claude .* /qship(check)? $stuck_ticket" 2>/dev/null | xargs kill -KILL 2>/dev/null || true
                 done
                 state_set "$EPIC" '.status' 'blocked'
@@ -584,6 +584,13 @@ NON-NEGOTIABLE:
         # described it without the literal token, cite the real log so SUBSTANCE
         # — not prose wording — decides. Gated on the log so a run is never faked.
         ensure_qe2etest_citation \
+            "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md" \
+            "$EPIC_DIR/wave-${WAVE_N}-qe2etest.log"
+        # If /qe2etest passed (agent recorded the canonical "Verdict: SHIPPABLE")
+        # but the PASS was only in decorated cells, add one matchable summary
+        # line — gated on the log + an explicit SHIPPABLE verdict so a PASS is
+        # never fabricated from hedged prose.
+        ensure_qe2etest_pass_summary \
             "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md" \
             "$EPIC_DIR/wave-${WAVE_N}-qe2etest.log"
         if ! validate_qe2etest_evidence \
