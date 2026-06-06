@@ -580,6 +580,12 @@ NON-NEGOTIABLE:
         # cosmetic wording slip can't HALT a wave whose /qe2etest substance is
         # real — the validator's substance gates still decide. (See lib.)
         normalize_phase3_heading "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md"
+        # If /qe2etest genuinely ran (its wave log is non-empty) but the worker
+        # described it without the literal token, cite the real log so SUBSTANCE
+        # — not prose wording — decides. Gated on the log so a run is never faked.
+        ensure_qe2etest_citation \
+            "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md" \
+            "$EPIC_DIR/wave-${WAVE_N}-qe2etest.log"
         if ! validate_qe2etest_evidence \
                 "$EPIC_DIR/wave-${WAVE_N}-phase23-evidence.md" \
                 "wave $WAVE_N" \

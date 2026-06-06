@@ -198,6 +198,36 @@ jobs:
           grep -qF '## Phase 30 Roadmap' "$D/p30.md" || { echo "FAIL: 'Phase 30' wrongly rewritten"; exit 1; }
           echo "✓ near-miss heading heals + validates; pytest-only still rejected; 'Phase 30' untouched"
 
+      - name: Phase 3 invocation citation — proven run heals near-miss, missing log never fabricates
+        run: |
+          # A worker can run /qe2etest for real (tee'ing output to the wave log)
+          # yet describe it without the literal token ("qe2etest trace",
+          # "wave-N-qe2etest.log"). Gated on the run-log, inject a truthful
+          # citation so SUBSTANCE decides — but with NO log, never fabricate one.
+          set -euo pipefail
+          TMPHOME=$(mktemp -d)
+          mkdir -p "$TMPHOME/.claude/skills" "$TMPHOME/.claude/agents"
+          echo '{"hooks":{}}' > "$TMPHOME/.claude/settings.json"
+          jq --arg home "$TMPHOME" --arg skills "$TMPHOME/.claude/skills" \
+             '.codebase.user_home=$home | .codebase.skills_root=$skills' \
+             config.example.json > "$TMPHOME/cfg.json"
+          HOME="$TMPHOME" bash setup.sh --config "$TMPHOME/cfg.json" >/dev/null
+          LIB="$TMPHOME/.claude/skills/qship/hooks/qship-evidence-lib.sh"
+          D=$(mktemp -d)
+          ev() { printf '## Phase 3 — /qe2etest evidence\nqe2etest production-trigger trace; see wave-2-qe2etest.log.\n| S1 | qe2etest:GET /a | a.txt | PASS |\n' > "$1"; }
+          source "$LIB"
+          # proven run (non-empty log): near-miss invocation must HALT before, heal after
+          ev "$D/withlog.md"; echo 'real /qe2etest output' > "$D/withlog.log"
+          validate_qe2etest_evidence "$D/withlog.md" w 2>/dev/null && { echo "FAIL: should reject the invocation near-miss before citation"; exit 1; }
+          ensure_qe2etest_citation "$D/withlog.md" "$D/withlog.log"
+          validate_qe2etest_evidence "$D/withlog.md" w || { echo "FAIL: proven-run near-miss should validate after citation"; exit 1; }
+          # no run-log: must NOT inject, must still reject (never fabricate a run)
+          ev "$D/nolog.md"
+          ensure_qe2etest_citation "$D/nolog.md" "$D/nolog.log"
+          grep -qE 'Skill\(skill="qe2etest"\)' "$D/nolog.md" && { echo "FAIL: injected a citation with no run-log"; exit 1; }
+          if validate_qe2etest_evidence "$D/nolog.md" n 2>/dev/null; then echo "FAIL: no-log near-miss must not pass"; exit 1; fi
+          echo "✓ proven run heals invocation near-miss; missing log never fabricates; substance still gates"
+
       - name: Validate eval scaffold (fixtures + rubric)
         run: bash scripts/eval.sh --check
 
