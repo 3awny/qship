@@ -69,6 +69,8 @@ Re-read what was implemented in this session. Build a checklist of *what changed
 
 **Layer ambiguity → assume the wider scope.** A change to a service function used by both an HTTP route and a worker is BOTH an API change AND a Worker change. Test both triggers.
 
+**Cover EVERY mode in scope — every scenario, every mode (Worker / UI / API / DB).** Each mode this change touches must end up with ≥1 scenario that actually runs through its production trigger; a mode that's in scope but left untested is a **gap to flag, not a silent skip**. For a mode the change genuinely doesn't touch, record it explicitly as `N/A — <one-line why>` (e.g. "no worker claim loop reaches the diff") rather than omitting it — so the reader sees the full surface and your reasoning. A frontend-only change collapses to **UI × data-states**, with Worker `N/A` and API/DB as the read-only signals that back the UI.
+
 Print the audit so the user sees what you're about to test:
 
 ```
@@ -231,7 +233,10 @@ Different local Postgres DBs carry different data shapes. Pick the most-data-ric
 (b) Pick the DB from the table above; if a scenario explicitly cites a DB in the matrix row, that wins.
 (c) **Group scenarios by DB to amortize server-restart cost.** uvicorn holds a connection pool to one DB — switching DBs requires killing and respawning the server. Aim for ≤3 server restarts across the entire matrix. Order the matrix so all `local_demo_db` rows run together (this is the default and will usually be the largest group), then all `local_alt_db`, then any `local_acme_corp_db` or `{{LOCAL_DEV_DB_NAME}}` rows.
 (d) Capture the chosen DB in the scenario's evidence row (column "DB used") so reviewers can reproduce.
-(e) If a scenario requires a fixture that doesn't exist in ANY local DB, mark it SKIP with rationale citing the missing data, AND drop a note to `/tmp/qe2etest-db-fixture-gap-<ts>.md` for a follow-up seed task. Don't spin up an empty fresh DB just for one scenario — local seed data is the point.
+(e) **Seed the data state if it doesn't exist — don't skip the scenario.** If a scenario needs a fixture/state that's absent from the chosen DB, CREATE it: insert/flip the minimal **source** rows, run the check, then **restore baseline** (the restore-`.sh` discipline in Step 4 — local-clone writes are pre-authorised). Capture the seed + restore in the evidence row. Two rules that make this work:
+  - **Seed the source, not a phantom column.** Many matches/derived states are computed server-side, not stored — a match endpoint may derive its rows from a mapping/lookup table via a content hash or a join, with no stored foreign-key column on the entity itself. Insert/adjust the rows the endpoint actually reads, then **re-probe the live endpoint** to confirm the state took before asserting.
+  - **Missing tenant/DB → clone it, don't skip.** If a needed shape lives in a tenant you don't have locally, clone it with `/qlocalclonedb` rather than dropping the scenario.
+  Mark a scenario SKIP **only as a last resort** when seeding is genuinely infeasible (cross-system state you can't construct locally) — and say exactly why; drop a note to `/tmp/qe2etest-db-fixture-gap-<ts>.md`. Never silently skip a scenario for want of data you could have seeded.
 
 If unsure, default to `local_demo_db`. The clean re-clone command is:
 ```bash
@@ -504,6 +509,8 @@ Before writing the report, run this check against your own work in the conversat
 - [ ] **Step 4 DB swaps**: between DB groups, did you `pkill` + re-`/qspinuplocal` and verify the swap with `current_database()` before running the next group's scenarios?
 - [ ] For every changed file in Step 1, can you point to a tool call where the **production trigger** for that file fired? (Not a unit test, not a REPL call — the actual HTTP request / worker run / cron invocation.)
 - [ ] If the Worker layer was in scope, did you reset the entity, run the worker `--once`, and `SELECT` the resulting rows from the DB?
+- [ ] **Per-mode coverage**: was every mode **in scope** for this change — Worker / UI / API / DB — actually exercised by ≥1 scenario that RAN (each with a concrete artifact), or explicitly recorded as `N/A — <why>`? A needed mode left untested is a **gap to flag, not a silent skip**.
+- [ ] **Seed-don't-skip**: for every scenario that needed a data state which didn't exist, did you SEED it (source rows, re-probed live) and RESTORE baseline — rather than skipping it? Any remaining SKIP must name why seeding was infeasible.
 - [ ] Did the stack run the **fix worktree's code**, not develop? (Quick check: `ps aux | grep uvicorn` should show the worktree path. Or: edit a log line in the changed file, restart, run the trigger, confirm the log line appears.)
 - [ ] Did you run against the right DB? (`psql -l` if uncertain.)
 - [ ] Did at least one scenario per Type bucket (happy_path / negative / boundary / edge / auth) actually run and report PASS or FAIL with a concrete artifact (curl response, pytest function, psql output, Playwright screenshot)?
