@@ -4,6 +4,21 @@ All notable changes to qship are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project is pre-1.x
 community software and only the latest `main` is supported.
 
+## [Unreleased]
+
+### Changed
+- **`/qe2etest` now enforces all-modes coverage and seeds missing fixtures
+  instead of skipping.** Step 1 gains an explicit "cover every mode in scope
+  (Worker / UI / API / DB)" mandate — an in-scope mode left untested is a gap to
+  flag, and a mode the change doesn't touch is recorded as `N/A — <why>` rather
+  than omitted. Step 3's per-scenario rule flips from "if a fixture doesn't
+  exist, mark it SKIP" to **seed the data state** (insert/flip the minimal source
+  rows the endpoint actually reads — many matches are computed server-side, not
+  stored — re-probe the live endpoint, then restore baseline; clone via
+  `/qlocalclonedb` if a tenant/DB is missing; SKIP only as a last resort with a
+  stated reason). The self-check gate adds two items so a run can't be declared
+  ready while an in-scope mode is untested or a seedable scenario was skipped.
+
 ## [1.0.1] — 2026-06-05
 
 ### Fixed
